@@ -6,7 +6,8 @@ require 'net/ssh/shell/subshell'
 module Net
   module SSH
     class Shell
-      class Error < RuntimeError; end
+      class CommunicationError < RuntimeError; end
+      class ExitError < RuntimeError; end
 
       attr_reader :session
       attr_reader :channel
@@ -143,18 +144,18 @@ module Net
 
       def open_failed(channel, code, description)
         @state = :closed
-        raise Error.new("could not open channel for process manager (#{description}, ##{code})")
+        raise CommunicationError.new("could not open channel for process manager (#{description}, ##{code})")
       end
 
       def on_exit_status(channel, data)
         unless data.read_long == 0
-          raise Error.new("the shell exited unexpectedly")
+          raise ExitError.new("the shell exited unexpectedly")
         end
       end
 
       def pty_requested(channel, success)
         @state = :shell
-        raise Error.new("could not request pty for process manager") unless success
+        raise CommunicationError.new("could not request pty for process manager") unless success
         if shell == :default
           channel.send_channel_request("shell", &method(:shell_requested))
         else
@@ -164,7 +165,7 @@ module Net
 
       def shell_requested(channel, success)
         @state = :initializing
-        raise Error.new("could not request shell for process manager") unless success
+        raise CommunicationError.new("could not request shell for process manager") unless success
         channel.on_data(&method(:look_for_initialization_done))
         channel.send_data "export PS1=; echo #{separator} $?\n"
       end
